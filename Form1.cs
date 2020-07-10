@@ -33,8 +33,8 @@ namespace WindowsFormsApp1
         public Form1()
         {
             InitializeComponent();
-            ZipsFolderPathTxt.Text = @"C:\Project\Resources\Zips";
-            CDRFilesLocationTxt.Text = @"C:\Project\Resources\Templates";
+            //ZipsFolderPathTxt.Text = @"D:\Projects\CorelDRAWAddon\Resources\Zips";
+            //CDRFilesLocationTxt.Text = @"D:\Projects\CorelDRAWAddon\Resources\Templates";
 
         }
 
@@ -42,43 +42,44 @@ namespace WindowsFormsApp1
 
         private async void GenerateBtn_Click(object sender, EventArgs e)
         {
-            transformImageFile(@"D:\Projects\CorelDRAWAddon\Resources\Sample\New bactch of files\026-6084095-0164338\0e921bbb-d250-14b9-27a3-b85e631688b5.svg");
+            //transformImageFile(@"D:\Projects\CorelDRAWAddon\Resources\Sample\New bactch of files\026-6084095-0164338\0e921bbb-d250-14b9-27a3-b85e631688b5.svg");
 
-            //if (CDRFilesLocationTxt.Text == "")
-            //{
-            //    MessageBox.Show("Please select CDR files location");
-            //    return;
-            //}
-            //if (ZipsFolderPathTxt.Text == "")
-            //{
-            //    MessageBox.Show("Please select zip files location");
-            //    return;
-            //}
-            //try
-            //{
+            if (CDRFilesLocationTxt.Text == "")
+            {
+                MessageBox.Show("Please select CDR files location");
+                return;
+            }
+            if (ZipsFolderPathTxt.Text == "")
+            {
+                MessageBox.Show("Please select zip files location");
+                return;
+            }
+            try
+            {
 
-            //    disableEveryThing();
-            //    var progress = new Progress<object>(v => {
-            //        if (v is int)
-            //        {
-            //            progressBar1.Value = (int)v;
-            //        }
-            //        else
-            //        {
-            //            errorConsoleTxt.Text += v.ToString();
-            //        }
-            //    });
-            //    processedZipFilesPath = ZipsFolderPathTxt.Text + @"\processed\";
-            //    extractPath = CDRFilesLocationTxt.Text + @"\temp\";
-            //    await Task.Run(() => generate(progress));
-            //    MessageBox.Show("Files generated successfully!");
-            //    enableEveryThing();
-            //}
-            //catch (Exception ex)
-            //{
-            //    MessageBox.Show(ex.Message);
-            //    enableEveryThing();
-            //}
+                disableEveryThing();
+                var progress = new Progress<object>(v =>
+                {
+                    if (v is int)
+                    {
+                        progressBar1.Value = (int)v;
+                    }
+                    else
+                    {
+                        errorConsoleTxt.Text += v.ToString();
+                    }
+                });
+                processedZipFilesPath = ZipsFolderPathTxt.Text + @"\processed\";
+                extractPath = CDRFilesLocationTxt.Text + @"\temp\";
+                await Task.Run(() => generate(progress));
+                MessageBox.Show("Files generated successfully!");
+                enableEveryThing();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+                enableEveryThing();
+            }
         }
 
         private void ImagesBrowse_Click(object sender, EventArgs e)
@@ -184,16 +185,159 @@ namespace WindowsFormsApp1
         private void transformImageFile(string imageFilePath)
         {
             SvgDocument document = SvgDocument.Open(imageFilePath);
-            for (int i = 0; i < document.Children.Count; i++) {
-                SvgElement child = document.Children[i];
-                if (child.GetType().Name == "SvgGroup" && child.ContainsAttribute("clip-path") && child.Children.Count > 0) {
-                    SvgElement innerGroup = document.Children[i] = child.Children[0];
-                    List<SvgElement> toBeRemoved = innerGroup.Children.Where(e => !new string[] { "SvgImage", "SvgText" }.Contains(e.GetType().Name)).ToList();
-                    foreach(var e in toBeRemoved) {
-                        innerGroup.Children.Remove(e);
+            int i = 0; 
+            while(i < document.Children.Count)
+            {
+                var child = document.Children[i];
+                if(child is SvgGroup)
+                {
+                    if(child.Children.Where(c => c is SvgRectangle).Count() > 0) {
+                        document.Children.RemoveAt(i);
+                        continue;
+                    }
+                    if(child.Transforms != null)
+                    {
+                        child.Transforms.RemoveAll(t => true);
+                    }
+                    if (child.ContainsAttribute("clip-path") && child.Children.Count > 0)
+                    {
+                        SvgElement innerGroup = document.Children[i] = child.Children[0];
+                        innerGroup.Transforms.RemoveAll(t => true);
+                        List<SvgElement> toBeRemoved = new List<SvgElement>();
+                        foreach (SvgElement innerElement in innerGroup.Children)
+                        {
+                            if (innerElement is SvgImage)
+                            {
+                                SvgImage image = (SvgImage)innerElement;
+                                if (image.X > 360)
+                                {
+                                    image.X = 360;
+                                }
+                                else if (image.X < -360)
+                                {
+                                    image.X = -360;
+                                }
+                                if (image.Y > 360)
+                                {
+                                    image.Y = 360;
+                                }
+                                else if (image.Y < -360)
+                                {
+                                    image.Y = -360;
+                                }
+                            }
+                            else if (innerElement is SvgText)
+                            {
+                                //innerElement.FontWeight = SvgFontWeight.Normal;
+                                innerElement.FontSize = 20;
+                                foreach (SvgElement potentialTextSpanElement in innerElement.Children)
+                                {
+                                    if (potentialTextSpanElement is SvgTextSpan)
+                                    {
+                                        SvgTextSpan textSpan = (SvgTextSpan)potentialTextSpanElement;
+                                        if (textSpan.X.Count > 0 && textSpan.X[0] > 360)
+                                        {
+                                            textSpan.X[0] = 360;
+                                        }
+                                        else if (textSpan.X.Count > 0 && textSpan.X[0] < -360)
+                                        {
+                                            textSpan.X[0] = -360;
+                                        }
+                                        if (textSpan.Y.Count > 0 && textSpan.Y[0] > 360)
+                                        {
+                                            textSpan.Y[0] = 360;
+                                        }
+                                        else if (textSpan.Y.Count > 0 && textSpan.Y[0] < -360)
+                                        {
+                                            textSpan.Y[0] = -360;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                toBeRemoved.Add(innerElement);
+                            }
+
+                        }
+                        foreach (var e in toBeRemoved)
+                        {
+                            innerGroup.Children.Remove(e);
+                        }
                     }
                 }
+
+                i++;
             }
+            //for (int i = 0; i < document.Children.Count; i++)
+            //{
+            //    SvgElement child = document.Children[i];
+            //    if(child.GetType().Name == "SvgGroup" && child.Transforms != null) {
+                    
+            //        child.Transforms.RemoveAll(t => true);
+                    
+            //    }
+            //    if (child.GetType().Name == "SvgGroup" && child.ContainsAttribute("clip-path") && child.Children.Count > 0)
+            //    {
+            //        SvgElement innerGroup = document.Children[i] = child.Children[0];
+            //        innerGroup.Transforms.RemoveAll(t => true);
+            //        List<SvgElement> toBeRemoved = new List<SvgElement>();
+            //        foreach (SvgElement innerElement in innerGroup.Children)
+            //        {
+            //            if (innerElement.GetType().Name == "SvgImage")
+            //            {
+            //                SvgImage image = (SvgImage)innerElement;
+            //                if (image.X > 360)
+            //                {
+            //                    image.X = 360;
+            //                }
+            //                else if (image.X < -360)
+            //                {
+            //                    image.X = -360;
+            //                }
+            //                if (image.Y > 360)
+            //                {
+            //                    image.Y = 360;
+            //                }
+            //                else if (image.Y < -360)
+            //                {
+            //                    image.Y = -360;
+            //                }
+            //            }
+            //            else if (innerElement.GetType().Name == "SvgText") {
+            //                //innerElement.FontWeight = SvgFontWeight.Normal;
+            //                innerElement.FontSize = 20;
+            //                foreach (SvgElement potentialTextSpanElement in innerElement.Children) {
+            //                    if (potentialTextSpanElement is SvgTextSpan) {
+            //                        SvgTextSpan textSpan = (SvgTextSpan)potentialTextSpanElement;
+            //                        if (textSpan.X.Count > 0 && textSpan.X[0] > 360)
+            //                        {
+            //                            textSpan.X[0] = 360;
+            //                        }
+            //                        else if (textSpan.X.Count > 0 && textSpan.X[0] < -360) {
+            //                            textSpan.X[0] = -360;
+            //                        }
+            //                        if (textSpan.Y.Count > 0 && textSpan.Y[0] > 360)
+            //                        {
+            //                            textSpan.Y[0] = 360;
+            //                        }
+            //                        else if (textSpan.Y.Count > 0 && textSpan.Y[0] < -360)
+            //                        {
+            //                            textSpan.Y[0] = -360;
+            //                        }
+            //                    }
+            //                }
+            //            } else {
+            //                toBeRemoved.Add(innerElement);
+            //            }
+
+            //        }
+            //        foreach (var e in toBeRemoved)
+            //        {
+            //            innerGroup.Children.Remove(e);
+            //        }
+            //    }
+            //}
             File.WriteAllText(imageFilePath, document.GetXML());
         }
 
@@ -338,7 +482,7 @@ namespace WindowsFormsApp1
             saveCloseDocument(document);
             moveZipFiles(processedZipFiles);
             application.Refresh();
-            emptyTempDirectory();
+            //emptyTempDirectory();
             progress.Report(100);
         }
         private void moveZipFiles(List<string> zipFiles)
