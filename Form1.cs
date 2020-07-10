@@ -8,6 +8,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -30,11 +31,14 @@ namespace WindowsFormsApp1
         private string processedZipFilesPath = "";
 
         private int counter = 0;
+
+        private Dictionary<string, string> inputTexts;
+        
         public Form1()
         {
             InitializeComponent();
-            //ZipsFolderPathTxt.Text = @"D:\Projects\CorelDRAWAddon\Resources\Zips";
-            //CDRFilesLocationTxt.Text = @"D:\Projects\CorelDRAWAddon\Resources\Templates";
+            //ZipsFolderPathTxt.Text = @"F:\Personal\QuickDesignerResources\Zips";
+            //CDRFilesLocationTxt.Text = @"F:\Personal\QuickDesignerResources\Templates";
 
         }
 
@@ -113,10 +117,14 @@ namespace WindowsFormsApp1
         {
             Directory.CreateDirectory(extractPath);
             emptyTempDirectory();
+            List<string> otherFiles = new List<string>();
+            List<string> svgFiles = new List<string>();
             List<string> imageFiles = new List<string>();
+            List<string> inputTextsList = new List<string>();
+
+            inputTexts = new Dictionary<string, string>();
             using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
             {
-                int count = 0;
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
                     if (entry.FullName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
@@ -135,11 +143,52 @@ namespace WindowsFormsApp1
                             entry.ExtractToFile(destinationPath);
                             if (Path.GetExtension(destinationPath).EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
                             {
-                                imageFiles.Add(destinationPath);
-                                count++;
+                                svgFiles.Add(destinationPath);
                             }
+                            else {
+                                otherFiles.Add(destinationPath);
+                            }
+                            //imageFiles.Add(destinationPath);
+                        }
+                    } else if(entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string destinationPath = Path.GetFullPath(Path.Combine(extractPath, entry.FullName));
+                        if (destinationPath.StartsWith(extractPath, StringComparison.Ordinal))
+                        {
+                            entry.ExtractToFile(destinationPath);
+                            string xmlFileData = File.ReadAllText(destinationPath);
+                            Regex regex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>");
+                            MatchCollection matches = regex.Matches(xmlFileData);
+                            foreach(Match match in matches)
+                            {
+                                inputTextsList.Add(match.Groups[1].Value);
+                            }
+
                         }
                     }
+                }
+            }
+            List<string> svgsText = new List<string>();
+            int i = 0;
+            foreach(string file in svgFiles) {
+                imageFiles.Add(file);
+                svgsText.Add(File.ReadAllText(file));
+                if(inputTextsList.Count > i) { 
+                    inputTexts.Add(Path.GetFileNameWithoutExtension(file), inputTextsList[i]);
+                }
+                i++;
+            }
+            foreach (string file in otherFiles)
+            {
+                bool existsInSvg = false;
+                foreach (string text in svgsText)
+                {
+                    if (text.Contains(Path.GetFileNameWithoutExtension(file))) {
+                        existsInSvg = true;
+                    }
+                }
+                if (!existsInSvg) { 
+                    imageFiles.Add(file);
                 }
             }
             return imageFiles;
@@ -147,38 +196,51 @@ namespace WindowsFormsApp1
 
         private VGCore.Shape loadResizedImage(VGCore.Layer layer, string imageFilePath)
         {
-            double adjustedMaxWidth = getMaxWidth(imageFilePath);
-            transformImageFile(imageFilePath);
+            double adjustedMaxWidth = MaxWidth;
+            if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                adjustedMaxWidth = getMaxWidth(imageFilePath);
+                transformImageFile(imageFilePath);
+            }
             layer.ImportEx(imageFilePath).Finish();
             VGCore.Shape image = layer.FindShape(Path.GetFileName(imageFilePath));
-            if (image.SizeWidth > adjustedMaxWidth || image.SizeHeight > MaxHeight)
+            if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
-                if (image.SizeWidth >= image.SizeHeight)
+                if (image.SizeWidth > adjustedMaxWidth || image.SizeHeight > MaxHeight)
+                {
+                    if (image.SizeWidth >= image.SizeHeight)
+                    {
+                        double diff = (image.SizeWidth - adjustedMaxWidth) / image.SizeWidth;
+                        image.SizeWidth = adjustedMaxWidth;
+                        image.SizeHeight = (1 - diff) * image.SizeHeight;
+
+                    }
+                    else
+                    {
+                        double diff = (image.SizeHeight - MaxHeight) / image.SizeHeight;
+                        image.SizeHeight = MaxHeight;
+                        image.SizeWidth = (1 - diff) * image.SizeWidth;
+                    }
+                }
+                if (image.SizeWidth > adjustedMaxWidth)
                 {
                     double diff = (image.SizeWidth - adjustedMaxWidth) / image.SizeWidth;
                     image.SizeWidth = adjustedMaxWidth;
                     image.SizeHeight = (1 - diff) * image.SizeHeight;
-
                 }
-                else
+                if (image.SizeHeight > MaxHeight)
                 {
                     double diff = (image.SizeHeight - MaxHeight) / image.SizeHeight;
                     image.SizeHeight = MaxHeight;
                     image.SizeWidth = (1 - diff) * image.SizeWidth;
                 }
             }
-            if (image.SizeWidth > adjustedMaxWidth)
-            {
-                double diff = (image.SizeWidth - adjustedMaxWidth) / image.SizeWidth;
-                image.SizeWidth = adjustedMaxWidth;
-                image.SizeHeight = (1 - diff) * image.SizeHeight;
-            }
-            if (image.SizeHeight > MaxHeight)
-            {
-                double diff = (image.SizeHeight - MaxHeight) / image.SizeHeight;
+            // if it's a jpg file of MUG
+            else {
+                image.SizeWidth = MaxHeight;
                 image.SizeHeight = MaxHeight;
-                image.SizeWidth = (1 - diff) * image.SizeWidth;
             }
+
             return image;
         }
 
@@ -464,6 +526,11 @@ namespace WindowsFormsApp1
                         x = positionX + ((MaxWidth - image.SizeWidth) / 2);
                         y = positionY - (MaxHeight - image.SizeHeight) / 2;
                         isFirstImage = false;
+
+                        // insert order id from zip file name into the row
+                        layer.CreateParagraphText(-150, y, -20, y - 20, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
+                            , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
+                            , "Arial", 30);
                     }
                     else
                     {
@@ -474,6 +541,16 @@ namespace WindowsFormsApp1
                     }
 
                     image.SetPosition(x, y);
+
+                    // Insert text from xml file
+                    String inputValue;
+                    bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out inputValue);
+                    if(hasValue && inputValue != null)
+                    {
+                        layer.CreateParagraphText(positionX, positionY, positionX + MaxWidth, y - 40, inputValue
+                            , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
+                            , "Arial", 25);
+                    }
                 }
                 progress.Report(((100 - 10) / zipFiles.Length) * zipCount);
                 zipCount++;

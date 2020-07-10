@@ -41,7 +41,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.IO.Compression, Version=4.1.2.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
@@ -95,8 +95,8 @@
   <ItemGroup>
     <COMReference Include="VGCore">
       <Guid>{95E23C91-BC5A-49F3-8CD1-1FC515597048}</Guid>
-      <VersionMajor>21</VersionMajor>
-      <VersionMinor>2</VersionMinor>
+      <VersionMajor>22</VersionMajor>
+      <VersionMinor>1</VersionMinor>
       <Lcid>0</Lcid>
       <WrapperTool>tlbimp</WrapperTool>
       <Isolated>False</Isolated>
