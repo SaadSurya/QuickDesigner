@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using VGCore;
 
 namespace WindowsFormsApp1
 {
@@ -32,13 +33,13 @@ namespace WindowsFormsApp1
 
         private int counter = 0;
 
-        private Dictionary<string, string> inputTexts;
+        private Dictionary<string, Dictionary<string, string>> inputTexts;
         
         public Form1()
         {
             InitializeComponent();
-            //ZipsFolderPathTxt.Text = @"F:\Personal\QuickDesignerResources\Zips";
-            //CDRFilesLocationTxt.Text = @"F:\Personal\QuickDesignerResources\Templates";
+            ZipsFolderPathTxt.Text = @"F:\Personal\QuickDesignerResources\Zips";
+            CDRFilesLocationTxt.Text = @"F:\Personal\QuickDesignerResources\Templates";
 
         }
 
@@ -121,8 +122,10 @@ namespace WindowsFormsApp1
             List<string> svgFiles = new List<string>();
             List<string> imageFiles = new List<string>();
             List<string> inputTextsList = new List<string>();
+            List<string> fontFamilyList = new List<string>();
+            List<string> fontColorList = new List<string>();
 
-            inputTexts = new Dictionary<string, string>();
+            inputTexts = new Dictionary<string, Dictionary<string, string>>();
             using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
             {
                 foreach (ZipArchiveEntry entry in archive.Entries)
@@ -157,11 +160,20 @@ namespace WindowsFormsApp1
                         {
                             entry.ExtractToFile(destinationPath);
                             string xmlFileData = File.ReadAllText(destinationPath);
-                            Regex regex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>");
-                            MatchCollection matches = regex.Matches(xmlFileData);
-                            foreach(Match match in matches)
+                            Regex inputRegex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>");
+                            foreach(Match match in inputRegex.Matches(xmlFileData))
                             {
                                 inputTextsList.Add(match.Groups[1].Value);
+                            }
+                            Regex familyRegex = new Regex(@"<family>(((?!<\/family>).)*)<\/family>");
+                            foreach (Match match in familyRegex.Matches(xmlFileData))
+                            {
+                                fontFamilyList.Add(match.Groups[1].Value);
+                            }
+                            Regex colorRegex = new Regex(@"<value>(((?!<\/value>).)*)<\/value>");
+                            foreach (Match match in colorRegex.Matches(xmlFileData))
+                            {
+                                fontColorList.Add(match.Groups[1].Value);
                             }
 
                         }
@@ -173,8 +185,12 @@ namespace WindowsFormsApp1
             foreach(string file in svgFiles) {
                 imageFiles.Add(file);
                 svgsText.Add(File.ReadAllText(file));
-                if(inputTextsList.Count > i) { 
-                    inputTexts.Add(Path.GetFileNameWithoutExtension(file), inputTextsList[i]);
+                if(inputTextsList.Count > i) {
+                    Dictionary<string, string> textData = new Dictionary<string, string>();
+                    textData.Add("text", inputTextsList[i]);
+                    textData.Add("family", fontFamilyList[i]);
+                    textData.Add("color", fontColorList[i]);
+                    inputTexts.Add(Path.GetFileNameWithoutExtension(file), textData);
                 }
                 i++;
             }
@@ -528,7 +544,7 @@ namespace WindowsFormsApp1
                         isFirstImage = false;
 
                         // insert order id from zip file name into the row
-                        layer.CreateParagraphText(-150, y, -20, y - 20, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
+                        layer.CreateArtisticText(-150, y-15, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
                             , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
                             , "Arial", 30);
                     }
@@ -543,13 +559,22 @@ namespace WindowsFormsApp1
                     image.SetPosition(x, y);
 
                     // Insert text from xml file
-                    String inputValue;
-                    bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out inputValue);
-                    if(hasValue && inputValue != null)
+                    Dictionary<string, string> textData;
+                    bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
+                    if(hasValue && textData != null)
                     {
-                        layer.CreateParagraphText(positionX, positionY, positionX + MaxWidth, y - 40, inputValue
+                        VGCore.Shape text = layer.CreateArtisticText(positionX, positionY, textData["text"]
                             , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
-                            , "Arial", 25);
+                            , textData["family"], 25);
+                        String color = textData["color"];
+                        if (color != null && color != "") {
+                            //.FromArgb(Convert.ToInt32(color.Replace("#", ""), 16))
+                            VGCore.Color c = layer.Color;
+                            c.HexValue = color;
+                            text.Fill.ApplyUniformFill(c);
+                        }
+                        
+                        
                     }
                 }
                 progress.Report(((100 - 10) / zipFiles.Length) * zipCount);
