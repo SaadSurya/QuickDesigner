@@ -124,6 +124,7 @@ namespace WindowsFormsApp1
             List<string> inputTextsList = new List<string>();
             List<string> fontFamilyList = new List<string>();
             List<string> fontColorList = new List<string>();
+            List<string> svgNameList = new List<string>();
 
             inputTexts = new Dictionary<string, Dictionary<string, string>>();
             using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
@@ -159,21 +160,26 @@ namespace WindowsFormsApp1
                         if (destinationPath.StartsWith(extractPath, StringComparison.Ordinal))
                         {
                             entry.ExtractToFile(destinationPath);
-                            string xmlFileData = File.ReadAllText(destinationPath);
-                            Regex inputRegex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>");
+                            string xmlFileData = File.ReadAllText(destinationPath).Replace("\n", "~`~").Replace("\r", "~`~");
+                            Regex svgRegex = new Regex(@"<svg>(((?!<\/svg>).)*)<\/svg>|<svg\/>");
+                            foreach (Match match in svgRegex.Matches(xmlFileData))
+                            {
+                                svgNameList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
+                            }
+                            Regex inputRegex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>|<inputValue\/>");
                             foreach(Match match in inputRegex.Matches(xmlFileData))
                             {
-                                inputTextsList.Add(match.Groups[1].Value);
+                                inputTextsList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
                             Regex familyRegex = new Regex(@"<family>(((?!<\/family>).)*)<\/family>");
                             foreach (Match match in familyRegex.Matches(xmlFileData))
                             {
-                                fontFamilyList.Add(match.Groups[1].Value);
+                                fontFamilyList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
                             Regex colorRegex = new Regex(@"<value>(((?!<\/value>).)*)<\/value>");
                             foreach (Match match in colorRegex.Matches(xmlFileData))
                             {
-                                fontColorList.Add(match.Groups[1].Value);
+                                fontColorList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
 
                         }
@@ -181,18 +187,25 @@ namespace WindowsFormsApp1
                 }
             }
             List<string> svgsText = new List<string>();
-            int i = 0;
             foreach(string file in svgFiles) {
                 imageFiles.Add(file);
                 svgsText.Add(File.ReadAllText(file));
-                if(inputTextsList.Count > i) {
-                    Dictionary<string, string> textData = new Dictionary<string, string>();
-                    textData.Add("text", inputTextsList[i]);
-                    textData.Add("family", fontFamilyList[i]);
-                    textData.Add("color", fontColorList[i]);
-                    inputTexts.Add(Path.GetFileNameWithoutExtension(file), textData);
+            }
+            for (int i = 0; i < svgNameList.Count; i++) {
+                Dictionary<string, string> textData = new Dictionary<string, string>();
+                if (inputTextsList.Count > i)
+                {
+                    textData.Add("text", System.Net.WebUtility.HtmlDecode(inputTextsList[i]));
                 }
-                i++;
+                if (fontFamilyList.Count > i)
+                {
+                    textData.Add("family", fontFamilyList[i]);
+                }
+                if (fontColorList.Count > i)
+                {
+                    textData.Add("color", fontColorList[i]);
+                }
+                inputTexts.Add(Path.GetFileNameWithoutExtension(svgNameList[i]), textData);
             }
             foreach (string file in otherFiles)
             {
@@ -561,9 +574,9 @@ namespace WindowsFormsApp1
                     // Insert text from xml file
                     Dictionary<string, string> textData;
                     bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
-                    if(hasValue && textData != null)
+                    if(hasValue && textData != null && textData["text"] != null && textData["text"].Length > 0)
                     {
-                        VGCore.Shape text = layer.CreateArtisticText(positionX, positionY, textData["text"]
+                        VGCore.Shape text = layer.CreateArtisticText(positionX, positionY-25, textData["text"]
                             , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
                             , textData["family"], 25);
                         String color = textData["color"];
