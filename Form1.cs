@@ -228,6 +228,11 @@ namespace WindowsFormsApp1
             double adjustedMaxWidth = MaxWidth;
             if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
+                //if svg file contains only text
+                string svgText = File.ReadAllText(imageFilePath);
+                if (svgText.Contains("<text") && !svgText.Contains("<image")) {
+                    return null;
+                }
                 adjustedMaxWidth = getMaxWidth(imageFilePath);
                 transformImageFile(imageFilePath);
             }
@@ -545,19 +550,21 @@ namespace WindowsFormsApp1
                         continue;
 
                     }
-                    double x;
-                    double y;
+                    double x = 0;
+                    double y = 0;
                     if (isFirstImage)
                     {
                         positionX = MarginLeft;
                         //positionY -= MaxHeight + MarginTop;
                         positionY -= MaxHeight;
-                        x = positionX + ((MaxWidth - image.SizeWidth) / 2);
-                        y = positionY - (MaxHeight - image.SizeHeight) / 2;
+                        if(image != null) { 
+                            x = positionX + ((MaxWidth - image.SizeWidth) / 2);
+                            y = positionY - (MaxHeight - image.SizeHeight) / 2;
+                        }
                         isFirstImage = false;
 
                         // insert order id from zip file name into the row
-                        layer.CreateArtisticText(-150, y-15, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
+                        layer.CreateArtisticText(-150, positionY - 15, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
                             , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
                             , "Arial", 30);
                     }
@@ -565,12 +572,16 @@ namespace WindowsFormsApp1
                     {
                         //positionX = PageWidth - MarginRight - image.SizeWidth;
                         positionX += MaxWidth + MarginRight;
-                        x = positionX + ((MaxWidth - image.SizeWidth) / 2);
-                        y = positionY - (MaxHeight - image.SizeHeight) / 2;
+                        if (image != null)
+                        {
+                            x = positionX + ((MaxWidth - image.SizeWidth) / 2);
+                            y = positionY - (MaxHeight - image.SizeHeight) / 2;
+                        }
                     }
-
-                    image.SetPosition(x, y);
-
+                    if (image != null)
+                    {
+                        image.SetPosition(x, y);
+                    }
                     // Insert text from xml file
                     Dictionary<string, string> textData;
                     bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
