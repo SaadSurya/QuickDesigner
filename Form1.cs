@@ -322,7 +322,7 @@ namespace WindowsFormsApp1
                                     image.Y = -360;
                                 }
                             }
-                            else if (innerElement is SvgText)
+                            /*else if (innerElement is SvgText)
                             {
                                 //innerElement.FontWeight = SvgFontWeight.Normal;
                                 innerElement.FontSize = 20;
@@ -349,7 +349,7 @@ namespace WindowsFormsApp1
                                         }
                                     }
                                 }
-                            }
+                            }*/
                             else
                             {
                                 toBeRemoved.Add(innerElement);
