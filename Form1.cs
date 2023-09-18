@@ -1,17 +1,20 @@
 ﻿using Svg;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web.UI.WebControls;
 using System.Windows.Forms;
+using System.Xml.XPath;
 using VGCore;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace WindowsFormsApp1
 {
@@ -34,12 +37,13 @@ namespace WindowsFormsApp1
         private int counter = 0;
 
         private Dictionary<string, Dictionary<string, string>> inputTexts;
-        
+        private Dictionary<string, string> svgToSnapMapping;
+
         public Form1()
         {
             InitializeComponent();
-            ZipsFolderPathTxt.Text = @"F:\Personal\QuickDesignerResources\Zips";
-            CDRFilesLocationTxt.Text = @"F:\Personal\QuickDesignerResources\Templates";
+            // ZipsFolderPathTxt.Text = @"D:\Personal\QuickDesignerResources\Zips";
+            // CDRFilesLocationTxt.Text = @"D:\Personal\QuickDesignerResources\Templates";
 
         }
 
@@ -127,6 +131,7 @@ namespace WindowsFormsApp1
             List<string> svgNameList = new List<string>();
 
             inputTexts = new Dictionary<string, Dictionary<string, string>>();
+            svgToSnapMapping = new Dictionary<string, string>();
             using (ZipArchive archive = ZipFile.OpenRead(zipFilePath))
             {
                 foreach (ZipArchiveEntry entry in archive.Entries)
@@ -181,6 +186,16 @@ namespace WindowsFormsApp1
                             {
                                 fontColorList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
+                            // Reading xml document with XPath
+                            var xpathDoc = new XPathDocument(destinationPath);
+                            var xpathNav = xpathDoc.CreateNavigator();
+                            // extracting svg to snapshot (jpg) mappings.
+                            var children = xpathNav.Select("/data/customizationData/children");
+                            while (children.MoveNext()) {
+                                var svgNode = children.Current.SelectSingleNode("svg");
+                                var snapNode = children.Current.SelectSingleNode("snapshot/imageName");
+                                svgToSnapMapping.Add(svgNode.Value, snapNode.Value);
+                            }
 
                         }
                     }
@@ -223,9 +238,9 @@ namespace WindowsFormsApp1
             return imageFiles;
         }
 
-        private VGCore.Shape loadResizedImage(VGCore.Layer layer, string imageFilePath)
+        private VGCore.Shape loadResizedImage(VGCore.Layer layer, string imageFilePath, double maxWidth, double maxHeight, double maxTextWidth)
         {
-            double adjustedMaxWidth = MaxWidth;
+            double adjustedMaxWidth = maxWidth;
             if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
                 //if svg file contains only text
@@ -233,14 +248,14 @@ namespace WindowsFormsApp1
                 if (svgText.Contains("<text") && !svgText.Contains("<image")) {
                     return null;
                 }
-                adjustedMaxWidth = getMaxWidth(imageFilePath);
+                adjustedMaxWidth = getMaxWidth(imageFilePath, maxWidth, maxTextWidth);
                 transformImageFile(imageFilePath);
             }
             layer.ImportEx(imageFilePath).Finish();
             VGCore.Shape image = layer.FindShape(Path.GetFileName(imageFilePath));
             if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
-                if (image.SizeWidth > adjustedMaxWidth || image.SizeHeight > MaxHeight)
+                if (image.SizeWidth > adjustedMaxWidth || image.SizeHeight > maxHeight)
                 {
                     if (image.SizeWidth >= image.SizeHeight)
                     {
@@ -251,8 +266,8 @@ namespace WindowsFormsApp1
                     }
                     else
                     {
-                        double diff = (image.SizeHeight - MaxHeight) / image.SizeHeight;
-                        image.SizeHeight = MaxHeight;
+                        double diff = (image.SizeHeight - maxHeight) / image.SizeHeight;
+                        image.SizeHeight = maxHeight;
                         image.SizeWidth = (1 - diff) * image.SizeWidth;
                     }
                 }
@@ -262,17 +277,17 @@ namespace WindowsFormsApp1
                     image.SizeWidth = adjustedMaxWidth;
                     image.SizeHeight = (1 - diff) * image.SizeHeight;
                 }
-                if (image.SizeHeight > MaxHeight)
+                if (image.SizeHeight > maxHeight)
                 {
-                    double diff = (image.SizeHeight - MaxHeight) / image.SizeHeight;
-                    image.SizeHeight = MaxHeight;
+                    double diff = (image.SizeHeight - maxHeight) / image.SizeHeight;
+                    image.SizeHeight = maxHeight;
                     image.SizeWidth = (1 - diff) * image.SizeWidth;
                 }
             }
             // if it's a jpg file of MUG
             else {
-                image.SizeWidth = MaxHeight;
-                image.SizeHeight = MaxHeight;
+                image.SizeWidth = maxHeight;
+                image.SizeHeight = maxHeight;
             }
 
             return image;
@@ -437,13 +452,12 @@ namespace WindowsFormsApp1
             File.WriteAllText(imageFilePath, document.GetXML());
         }
 
-        private double getMaxWidth(string imageFilePath)
+        private double getMaxWidth(string imageFilePath, double maxWidth, double maxTextWidth)
         {
-            double maxWidth = MaxWidth;
             SvgDocument document = SvgDocument.Open(imageFilePath);
             if (document.GetXML().Contains("<text") && !document.GetXML().Contains("<image"))
             {
-                return MaxTextWidth;
+                return maxTextWidth;
             }
             return maxWidth;
         }
@@ -531,13 +545,18 @@ namespace WindowsFormsApp1
                 VGCore.Layer layer = document.ActiveLayer;
                 List<string> imageFiles = getImagesFromZip(zipFilePath);
 
+
+                if (svgToSnapMapping != null && svgToSnapMapping.Count == 3) {
+                    LoadThirdSurface(document, layer, imageFiles, zipCount);
+                }
+
                 bool isFirstImage = true;
                 foreach (string imageFilePath in imageFiles)
                 {
                     VGCore.Shape image;
                     try
                     {
-                        image = loadResizedImage(layer, imageFilePath);
+                        image = loadResizedImage(layer, imageFilePath, MaxWidth, MaxHeight, MaxTextWidth);
                     }
                     catch (Exception ex)
                     {
@@ -583,23 +602,7 @@ namespace WindowsFormsApp1
                         image.SetPosition(x, y);
                     }
                     // Insert text from xml file
-                    Dictionary<string, string> textData;
-                    bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
-                    if(hasValue && textData != null && textData["text"] != null && textData["text"].Length > 0)
-                    {
-                        VGCore.Shape text = layer.CreateArtisticText(positionX, positionY-25, textData["text"]
-                            , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
-                            , textData["family"], 25);
-                        String color = textData["color"];
-                        if (color != null && color != "") {
-                            //.FromArgb(Convert.ToInt32(color.Replace("#", ""), 16))
-                            VGCore.Color c = layer.Color;
-                            c.HexValue = color;
-                            text.Fill.ApplyUniformFill(c);
-                        }
-                        
-                        
-                    }
+                    loadTextFromXmlFile(layer, imageFilePath, positionX, positionY);
                 }
                 progress.Report(((100 - 10) / zipFiles.Length) * zipCount);
                 zipCount++;
@@ -611,6 +614,71 @@ namespace WindowsFormsApp1
             //emptyTempDirectory();
             progress.Report(100);
         }
+
+        private void loadTextFromXmlFile(Layer layer, string imageFilePath, double positionX, double positionY)
+        {
+            Dictionary<string, string> textData;
+            bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
+            if (hasValue && textData != null && textData["text"] != null && textData["text"].Length > 0)
+            {
+                VGCore.Shape text = layer.CreateArtisticText(positionX, positionY - 25, textData["text"]
+                    , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
+                    , textData["family"], 25);
+                String color = textData["color"];
+                if (color != null && color != "")
+                {
+                    //.FromArgb(Convert.ToInt32(color.Replace("#", ""), 16))
+                    VGCore.Color c = layer.Color;
+                    c.HexValue = color;
+                    text.Fill.ApplyUniformFill(c);
+                }
+
+
+            }
+        }
+
+        private void LoadThirdSurface(Document document, Layer layer, List<string> imageFiles, int zipCount)
+        {
+            var yPositions = new Dictionary<int, double>
+            {
+                { 1, 235 }, // First row in the document
+                { 2, 140 }, // Second row in the document
+                { 0, 46 } // Third row in the document
+            };
+
+            var thirdMapping = svgToSnapMapping.ElementAt(2);
+            var svgImageFile = imageFiles.Where(i => i.EndsWith(thirdMapping.Key)).FirstOrDefault();
+            var jpgImageFile = imageFiles.Where(i => i.EndsWith(thirdMapping.Value)).FirstOrDefault();
+            
+            // load svg image and text
+            var svgImage = loadResizedImage(layer, svgImageFile, 80, 80, MaxTextWidth);
+            double positionX = -205;
+            double positionY = yPositions[zipCount % 3];
+            if (svgImage != null)
+            {
+                var x = positionX - (svgImage.SizeWidth / 2);
+                var y = positionY + (svgImage.SizeHeight / 2);
+                svgImage.SetPosition(x, y);
+            }
+
+            loadTextFromXmlFile(layer, svgImageFile, positionX - 40, positionY + 40);
+
+            // load jpg image and text
+            var jpgImage = loadResizedImage(layer, jpgImageFile, 80, 80, MaxTextWidth);
+            positionX = -56;
+            positionY = yPositions[zipCount % 3];
+            if (jpgImage != null)
+            {
+                var x = positionX - (jpgImage.SizeWidth / 2);
+                var y = positionY + (jpgImage.SizeHeight / 2);
+                jpgImage.SetPosition(x, y);
+            }
+            loadTextFromXmlFile(layer, jpgImageFile, positionX - 40, positionY + 40);
+
+            // Remove third surface files from imageFiles list.
+            imageFiles.RemoveAll(i => i == svgImageFile || i == jpgImageFile);
+        }
+
         private void moveZipFiles(List<string> zipFiles)
         {
             foreach (string zipFile in zipFiles)
