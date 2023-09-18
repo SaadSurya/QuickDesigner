@@ -2,19 +2,14 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reflection.Emit;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Web.UI.WebControls;
 using System.Windows.Forms;
 using System.Xml.XPath;
 using VGCore;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace WindowsFormsApp1
 {
@@ -154,12 +149,14 @@ namespace WindowsFormsApp1
                             {
                                 svgFiles.Add(destinationPath);
                             }
-                            else {
+                            else
+                            {
                                 otherFiles.Add(destinationPath);
                             }
                             //imageFiles.Add(destinationPath);
                         }
-                    } else if(entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                    }
+                    else if (entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
                     {
                         string destinationPath = Path.GetFullPath(Path.Combine(extractPath, entry.FullName));
                         if (destinationPath.StartsWith(extractPath, StringComparison.Ordinal))
@@ -172,7 +169,7 @@ namespace WindowsFormsApp1
                                 svgNameList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
                             Regex inputRegex = new Regex(@"<inputValue>(((?!<\/inputValue>).)*)<\/inputValue>|<inputValue\/>");
-                            foreach(Match match in inputRegex.Matches(xmlFileData))
+                            foreach (Match match in inputRegex.Matches(xmlFileData))
                             {
                                 inputTextsList.Add(match.Groups[1].Value.Replace("~`~", Environment.NewLine));
                             }
@@ -191,7 +188,8 @@ namespace WindowsFormsApp1
                             var xpathNav = xpathDoc.CreateNavigator();
                             // extracting svg to snapshot (jpg) mappings.
                             var children = xpathNav.Select("/data/customizationData/children");
-                            while (children.MoveNext()) {
+                            while (children.MoveNext())
+                            {
                                 var svgNode = children.Current.SelectSingleNode("svg");
                                 var snapNode = children.Current.SelectSingleNode("snapshot/imageName");
                                 svgToSnapMapping.Add(svgNode.Value, snapNode.Value);
@@ -202,11 +200,13 @@ namespace WindowsFormsApp1
                 }
             }
             List<string> svgsText = new List<string>();
-            foreach(string file in svgFiles) {
+            foreach (string file in svgFiles)
+            {
                 imageFiles.Add(file);
                 svgsText.Add(File.ReadAllText(file));
             }
-            for (int i = 0; i < svgNameList.Count; i++) {
+            for (int i = 0; i < svgNameList.Count; i++)
+            {
                 Dictionary<string, string> textData = new Dictionary<string, string>();
                 if (inputTextsList.Count > i)
                 {
@@ -227,32 +227,35 @@ namespace WindowsFormsApp1
                 bool existsInSvg = false;
                 foreach (string text in svgsText)
                 {
-                    if (text.Contains(Path.GetFileNameWithoutExtension(file))) {
+                    if (text.Contains(Path.GetFileNameWithoutExtension(file)))
+                    {
                         existsInSvg = true;
                     }
                 }
-                if (!existsInSvg) { 
+                if (!existsInSvg)
+                {
                     imageFiles.Add(file);
                 }
             }
             return imageFiles;
         }
 
-        private VGCore.Shape loadResizedImage(VGCore.Layer layer, string imageFilePath, double maxWidth, double maxHeight, double maxTextWidth)
+        private Shape loadResizedImage(Layer layer, string imageFilePath, double maxWidth, double maxHeight, double maxTextWidth)
         {
             double adjustedMaxWidth = maxWidth;
             if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
                 //if svg file contains only text
                 string svgText = File.ReadAllText(imageFilePath);
-                if (svgText.Contains("<text") && !svgText.Contains("<image")) {
+                if (svgText.Contains("<text") && !svgText.Contains("<image"))
+                {
                     return null;
                 }
                 adjustedMaxWidth = getMaxWidth(imageFilePath, maxWidth, maxTextWidth);
                 transformImageFile(imageFilePath);
             }
             layer.ImportEx(imageFilePath).Finish();
-            VGCore.Shape image = layer.FindShape(Path.GetFileName(imageFilePath));
+            Shape image = layer.FindShape(Path.GetFileName(imageFilePath));
             if (imageFilePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
             {
                 if (image.SizeWidth > adjustedMaxWidth || image.SizeHeight > maxHeight)
@@ -285,7 +288,8 @@ namespace WindowsFormsApp1
                 }
             }
             // if it's a jpg file of MUG
-            else {
+            else
+            {
                 image.SizeWidth = maxHeight;
                 image.SizeHeight = maxHeight;
             }
@@ -296,17 +300,18 @@ namespace WindowsFormsApp1
         private void transformImageFile(string imageFilePath)
         {
             SvgDocument document = SvgDocument.Open(imageFilePath);
-            int i = 0; 
-            while(i < document.Children.Count)
+            int i = 0;
+            while (i < document.Children.Count)
             {
                 var child = document.Children[i];
-                if(child is SvgGroup)
+                if (child is SvgGroup)
                 {
-                    if(child.Children.Where(c => c is SvgRectangle).Count() > 0) {
+                    if (child.Children.Where(c => c is SvgRectangle).Count() > 0)
+                    {
                         document.Children.RemoveAt(i);
                         continue;
                     }
-                    if(child.Transforms != null)
+                    if (child.Transforms != null)
                     {
                         child.Transforms.RemoveAll(t => true);
                     }
@@ -384,9 +389,9 @@ namespace WindowsFormsApp1
             //{
             //    SvgElement child = document.Children[i];
             //    if(child.GetType().Name == "SvgGroup" && child.Transforms != null) {
-                    
+
             //        child.Transforms.RemoveAll(t => true);
-                    
+
             //    }
             //    if (child.GetType().Name == "SvgGroup" && child.ContainsAttribute("clip-path") && child.Children.Count > 0)
             //    {
@@ -472,19 +477,19 @@ namespace WindowsFormsApp1
             }
         }
 
-        private VGCore.Document newDocument(VGCore.Application application)
+        private Document newDocument(VGCore.Application application)
         {
-            VGCore.Document document = application.CreateDocument();
+            Document document = application.CreateDocument();
             document.Name = ++counter + "_" + Guid.NewGuid().ToString();
             document.Activate();
-            document.Unit = VGCore.cdrUnit.cdrMillimeter;
+            document.Unit = cdrUnit.cdrMillimeter;
             document.ActivePage.SetSize(210, 297);
-            document.Rulers.VUnits = document.Rulers.HUnits = VGCore.cdrUnit.cdrMillimeter;
+            document.Rulers.VUnits = document.Rulers.HUnits = cdrUnit.cdrMillimeter;
             createGuideLines(document);
             return document;
         }
 
-        private void saveCloseDocument(VGCore.Document document)
+        private void saveCloseDocument(Document document)
         {
             document.SaveAs(CDRFilesLocationTxt.Text + "\\" + document.Name + ".cdr");
             document.Close();
@@ -522,7 +527,7 @@ namespace WindowsFormsApp1
             {
                 throw new Exception("CorelDRAW is not started or its version is not compatible with the software, please start CorelDRAW if not started or install compatible version");
             }
-            VGCore.Document document = null;
+            Document document = null;
             double positionX = 0;
             double positionY = 0;
             List<string> processedZipFiles = new List<string>();
@@ -542,18 +547,19 @@ namespace WindowsFormsApp1
                     //positionY = PageHeight + MaxHeight;
                     positionY = PageHeight - MarginTop + MaxHeight;
                 }
-                VGCore.Layer layer = document.ActiveLayer;
+                Layer layer = document.ActiveLayer;
                 List<string> imageFiles = getImagesFromZip(zipFilePath);
 
 
-                if (svgToSnapMapping != null && svgToSnapMapping.Count == 3) {
+                if (svgToSnapMapping != null && svgToSnapMapping.Count == 3)
+                {
                     LoadThirdSurface(document, layer, imageFiles, zipCount);
                 }
 
                 bool isFirstImage = true;
                 foreach (string imageFilePath in imageFiles)
                 {
-                    VGCore.Shape image;
+                    Shape image;
                     try
                     {
                         image = loadResizedImage(layer, imageFilePath, MaxWidth, MaxHeight, MaxTextWidth);
@@ -565,7 +571,7 @@ namespace WindowsFormsApp1
                         //image = layer.CreateArtisticText(0, 0, message);
                         //image.SizeWidth = MaxWidth;
                         //image.SizeHeight = MaxHeight;
-                        //image.WrapText = VGCore.cdrWrapStyle.cdrWrapSquareAboveBelow;
+                        //image.WrapText = cdrWrapStyle.cdrWrapSquareAboveBelow;
                         continue;
 
                     }
@@ -576,7 +582,8 @@ namespace WindowsFormsApp1
                         positionX = MarginLeft;
                         //positionY -= MaxHeight + MarginTop;
                         positionY -= MaxHeight;
-                        if(image != null) { 
+                        if (image != null)
+                        {
                             x = positionX + ((MaxWidth - image.SizeWidth) / 2);
                             y = positionY - (MaxHeight - image.SizeHeight) / 2;
                         }
@@ -584,7 +591,7 @@ namespace WindowsFormsApp1
 
                         // insert order id from zip file name into the row
                         layer.CreateArtisticText(-150, positionY - 15, Path.GetFileNameWithoutExtension(zipFilePath).Split('_')[0]
-                            , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
+                            , cdrTextLanguage.cdrLanguageNone, cdrTextCharSet.cdrCharSetMixed
                             , "Arial", 30);
                     }
                     else
@@ -621,14 +628,14 @@ namespace WindowsFormsApp1
             bool hasValue = inputTexts.TryGetValue(Path.GetFileNameWithoutExtension(imageFilePath), out textData);
             if (hasValue && textData != null && textData["text"] != null && textData["text"].Length > 0)
             {
-                VGCore.Shape text = layer.CreateArtisticText(positionX, positionY - 25, textData["text"]
-                    , VGCore.cdrTextLanguage.cdrLanguageNone, VGCore.cdrTextCharSet.cdrCharSetMixed
+                Shape text = layer.CreateArtisticText(positionX, positionY - 25, textData["text"]
+                    , cdrTextLanguage.cdrLanguageNone, cdrTextCharSet.cdrCharSetMixed
                     , textData["family"], 25);
-                String color = textData["color"];
+                string color = textData["color"];
                 if (color != null && color != "")
                 {
                     //.FromArgb(Convert.ToInt32(color.Replace("#", ""), 16))
-                    VGCore.Color c = layer.Color;
+                    Color c = layer.Color;
                     c.HexValue = color;
                     text.Fill.ApplyUniformFill(c);
                 }
@@ -649,7 +656,7 @@ namespace WindowsFormsApp1
             var thirdMapping = svgToSnapMapping.ElementAt(2);
             var svgImageFile = imageFiles.Where(i => i.EndsWith(thirdMapping.Key)).FirstOrDefault();
             var jpgImageFile = imageFiles.Where(i => i.EndsWith(thirdMapping.Value)).FirstOrDefault();
-            
+
             // load svg image and text
             var svgImage = loadResizedImage(layer, svgImageFile, 80, 80, MaxTextWidth);
             double positionX = -205;
@@ -687,7 +694,7 @@ namespace WindowsFormsApp1
             }
             zipFiles.RemoveAll(s => true);
         }
-        private void createGuideLines(VGCore.Document document)
+        private void createGuideLines(Document document)
         {
             //Horizontal Guides
             double y = PageHeight - MarginTop;
